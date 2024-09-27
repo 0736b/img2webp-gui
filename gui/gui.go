@@ -24,6 +24,8 @@ type AppState struct {
 
 	statusLabel *widget.Label
 
+	convertedCount int
+
 	mutex sync.Mutex
 }
 
@@ -37,7 +39,8 @@ func Run() {
 	ui := &AppState{
 		win: w,
 
-		fileList: []*models.ImageItem{},
+		fileList:       []*models.ImageItem{},
+		convertedCount: 0,
 	}
 
 	_list := widget.NewList(
@@ -87,13 +90,16 @@ func Run() {
 
 func (ui *AppState) forceRefreshList() {
 
+	ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", ui.convertedCount, len(ui.fileList)))
 	ui.listWidget.Refresh()
 }
 
 func (ui *AppState) onClearList() {
 
 	ui.mutex.Lock()
+	ui.statusLabel.SetText("Waiting for files...")
 	ui.fileList = make([]*models.ImageItem, 0)
+	ui.convertedCount = 0
 	ui.mutex.Unlock()
 
 	ui.listWidget.Refresh()
@@ -115,15 +121,17 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 
 		ui.listWidget.Refresh()
 
-		ui.statusLabel.SetText(fmt.Sprintf("Converting %d files", len(ui.fileList)))
-
 		go ui.convertFile(item, ui.forceRefreshList)
 	}
+
+	ui.statusLabel.SetText("Converting...")
+
 }
 
 func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 
 	time.Sleep(2 * time.Second)
 	item.IsConverting = false
+	ui.convertedCount++
 	update()
 }
