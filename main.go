@@ -9,71 +9,71 @@ package main
 import "C"
 
 import (
-	"fmt"
-	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
-	"unsafe"
+	"img2webp/gui"
 )
 
 func main() {
-	// Open an image file
-	file, err := os.Open("input.jpg")
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
 
-	// Decode the image
-	img, _, err := image.Decode(file)
-	if err != nil {
-		fmt.Println("Error decoding image:", err)
-		return
-	}
+	gui.Run()
 
-	// Get image dimensions
-	bounds := img.Bounds()
-	width, height := bounds.Max.X, bounds.Max.Y
+	// // Open an image file
+	// file, err := os.Open("input.jpg")
+	// if err != nil {
+	// 	fmt.Println("Error opening file:", err)
+	// 	return
+	// }
+	// defer file.Close()
 
-	// Convert image to RGBA
-	rgba := image.NewRGBA(bounds)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			rgba.Set(x, y, img.At(x, y))
-		}
-	}
+	// // Decode the image
+	// img, _, err := image.Decode(file)
+	// if err != nil {
+	// 	fmt.Println("Error decoding image:", err)
+	// 	return
+	// }
 
-	// Encode to WebP
-	var output *C.uint8_t
-	outputSize := C.size_t(0)
-	outputSize = C.WebPEncodeRGBA(
-		(*C.uint8_t)(unsafe.Pointer(&rgba.Pix[0])),
-		C.int(width),
-		C.int(height),
-		C.int(rgba.Stride),
-		C.float(75),
-		&output,
-	)
+	// // Get image dimensions
+	// bounds := img.Bounds()
+	// width, height := bounds.Max.X, bounds.Max.Y
 
-	if outputSize == 0 {
-		fmt.Println("Error encoding to WebP")
-		return
-	}
+	// // Convert image to RGBA
+	// rgba := image.NewRGBA(bounds)
+	// for y := 0; y < height; y++ {
+	// 	for x := 0; x < width; x++ {
+	// 		rgba.Set(x, y, img.At(x, y))
+	// 	}
+	// }
 
-	// Convert C buffer to Go slice
-	goOutput := C.GoBytes(unsafe.Pointer(output), C.int(outputSize))
+	// // Encode to WebP
+	// var output *C.uint8_t
+	// outputSize := C.size_t(0)
+	// outputSize = C.WebPEncodeRGBA(
+	// 	(*C.uint8_t)(unsafe.Pointer(&rgba.Pix[0])),
+	// 	C.int(width),
+	// 	C.int(height),
+	// 	C.int(rgba.Stride),
+	// 	C.float(75),
+	// 	&output,
+	// )
 
-	// Free the C buffer
-	defer C.free(unsafe.Pointer(output))
+	// if outputSize == 0 {
+	// 	fmt.Println("Error encoding to WebP")
+	// 	return
+	// }
 
-	// Save the WebP image
-	err = os.WriteFile("output.webp", goOutput, 0644)
-	if err != nil {
-		fmt.Println("Error writing WebP file:", err)
-		return
-	}
+	// // Convert C buffer to Go slice
+	// goOutput := C.GoBytes(unsafe.Pointer(output), C.int(outputSize))
 
-	fmt.Println("Image converted successfully")
+	// // Free the C buffer
+	// defer C.free(unsafe.Pointer(output))
+
+	// // Save the WebP image
+	// err = os.WriteFile("output.webp", goOutput, 0644)
+	// if err != nil {
+	// 	fmt.Println("Error writing WebP file:", err)
+	// 	return
+	// }
+
+	// fmt.Println("Image converted successfully")
 }
