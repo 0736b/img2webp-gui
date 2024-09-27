@@ -12,11 +12,18 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"img2webp/gui"
+	"img2webp/services"
+	"img2webp/utils"
 )
 
 func main() {
 
-	gui.Run()
+	// ensure the output dir is exists
+	utils.CreateOutputDir()
+
+	service := services.NewWebpService()
+
+	gui.Run(service)
 
 	// // Open an image file
 	// file, err := os.Open("input.jpg")

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image/color"
 	"img2webp/gui/models"
+	"img2webp/services"
+	"img2webp/utils"
 	"sync"
 	"time"
 
@@ -19,29 +21,32 @@ import (
 type AppState struct {
 	win fyne.Window
 
+	service services.WebpService
+
 	fileList   []*models.ImageItem
 	listWidget *widget.List
 
 	statusLabel    *widget.Label
 	convertedCount int
-
-	forceStop chan bool
+	countChan      chan struct{}
 
 	mutex sync.Mutex
 }
 
-func Run() {
+func Run(service services.WebpService) {
 
 	a := app.New()
 	w := a.NewWindow("Img2Webp Converter")
-	w.Resize(fyne.NewSize(720, 360))
+	w.Resize(fyne.NewSize(648, 324))
 	w.SetFixedSize(true)
 
 	ui := &AppState{
-		win: w,
+		win:     w,
+		service: service,
 
 		fileList:       []*models.ImageItem{},
 		convertedCount: 0,
+		countChan:      make(chan struct{}, 1),
 	}
 
 	_list := widget.NewList(
@@ -60,6 +65,7 @@ func Run() {
 			widget := o.(*fyne.Container)
 			widget.Objects = models.NewImageItemWidget(item, ui.forceRefreshList).Objects
 			ui.mutex.Unlock()
+			ui.listWidget.SetItemHeight(i, 50)
 		})
 
 	ui.listWidget = _list
@@ -85,19 +91,22 @@ func Run() {
 
 	ui.win.SetContent(container.New(layout.CustomPaddedLayout{TopPadding: 0, BottomPadding: 8, LeftPadding: 12, RightPadding: 12}, _content))
 
+	go ui.convertedCounter()
+
 	ui.win.ShowAndRun()
 
 }
 
 func (ui *AppState) forceRefreshList() {
 
-	ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", ui.convertedCount, len(ui.fileList)))
 	ui.listWidget.Refresh()
 }
 
 func (ui *AppState) onClearList() {
 
 	ui.mutex.Lock()
+
+	oldLen := len(ui.fileList)
 
 	n := 0
 	for _, x := range ui.fileList {
@@ -107,15 +116,17 @@ func (ui *AppState) onClearList() {
 		}
 	}
 	ui.fileList = ui.fileList[:n]
-
 	ui.convertedCount = 0
+
 	ui.mutex.Unlock()
 
 	if len(ui.fileList) == 0 {
 		ui.statusLabel.SetText("Waiting for files...")
 	}
 
-	ui.listWidget.Refresh()
+	if oldLen != len(ui.fileList) {
+		ui.listWidget.Refresh()
+	}
 }
 
 func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
@@ -123,9 +134,11 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 	for _, uri := range uris {
 
 		item := &models.ImageItem{
-			Path:         uri.Path(),
-			FileSize:     "",
-			IsConverting: true,
+			Path:              uri.Path(),
+			FileName:          utils.ExtractFileName(uri.Path()),
+			OriginalFileSize:  ui.service.GetFileSizeString(uri.Path()),
+			ConvertedFileSize: -1,
+			IsConverting:      true,
 		}
 
 		ui.mutex.Lock()
@@ -147,9 +160,19 @@ func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 	time.Sleep(2 * time.Second)
 
 	ui.mutex.Lock()
+	item.ConvertedFileSize = 10000
 	item.IsConverting = false
-	ui.convertedCount++
 	ui.mutex.Unlock()
 
+	ui.countChan <- struct{}{}
+
 	update()
+}
+
+func (ui *AppState) convertedCounter() {
+
+	for range ui.countChan {
+		ui.convertedCount++
+		ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", ui.convertedCount, len(ui.fileList)))
+	}
 }
