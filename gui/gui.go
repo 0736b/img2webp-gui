@@ -22,9 +22,10 @@ type AppState struct {
 	fileList   []*models.ImageItem
 	listWidget *widget.List
 
-	statusLabel *widget.Label
-
+	statusLabel    *widget.Label
 	convertedCount int
+
+	forceStop chan bool
 
 	mutex sync.Mutex
 }
@@ -32,7 +33,7 @@ type AppState struct {
 func Run() {
 
 	a := app.New()
-	w := a.NewWindow("Img2Webp")
+	w := a.NewWindow("Img2Webp Converter")
 	w.Resize(fyne.NewSize(720, 360))
 	w.SetFixedSize(true)
 
@@ -70,7 +71,7 @@ func Run() {
 
 	_clearBtn := widget.NewButtonWithIcon("Clear", theme.DeleteIcon(), ui.onClearList)
 
-	_bg := canvas.NewRectangle(color.RGBA{R: 17, G: 17, B: 18, A: 255})
+	_bg := canvas.NewRectangle(color.RGBA{R: 0, G: 0, B: 0, A: 60})
 
 	_scrollContainer := container.NewVScroll(ui.listWidget)
 
@@ -97,10 +98,22 @@ func (ui *AppState) forceRefreshList() {
 func (ui *AppState) onClearList() {
 
 	ui.mutex.Lock()
-	ui.statusLabel.SetText("Waiting for files...")
-	ui.fileList = make([]*models.ImageItem, 0)
+
+	n := 0
+	for _, x := range ui.fileList {
+		if x.IsConverting {
+			ui.fileList[n] = x
+			n++
+		}
+	}
+	ui.fileList = ui.fileList[:n]
+
 	ui.convertedCount = 0
 	ui.mutex.Unlock()
+
+	if len(ui.fileList) == 0 {
+		ui.statusLabel.SetText("Waiting for files...")
+	}
 
 	ui.listWidget.Refresh()
 }
@@ -124,14 +137,19 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 		go ui.convertFile(item, ui.forceRefreshList)
 	}
 
+	ui.mutex.Lock()
 	ui.statusLabel.SetText("Converting...")
-
+	ui.mutex.Unlock()
 }
 
 func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 
 	time.Sleep(2 * time.Second)
+
+	ui.mutex.Lock()
 	item.IsConverting = false
 	ui.convertedCount++
+	ui.mutex.Unlock()
+
 	update()
 }
