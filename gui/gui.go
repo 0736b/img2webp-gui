@@ -7,7 +7,6 @@ import (
 	"img2webp/services"
 	"img2webp/utils"
 	"sync"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -157,16 +156,15 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 
 func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 
-	time.Sleep(2 * time.Second)
-
-	ui.mutex.Lock()
-	item.ConvertedFileSize = 10000
-	item.IsConverting = false
-	ui.mutex.Unlock()
-
-	ui.countChan <- struct{}{}
-
-	update()
+	convertedSize := ui.service.ConvertToWebp(item.Path)
+	if convertedSize != -1 {
+		ui.mutex.Lock()
+		item.ConvertedFileSize = convertedSize
+		item.IsConverting = false
+		ui.mutex.Unlock()
+		ui.countChan <- struct{}{}
+		update()
+	}
 }
 
 func (ui *AppState) convertedCounter() {
