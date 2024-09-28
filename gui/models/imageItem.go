@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -52,7 +53,7 @@ func NewImageItemWidget(item *ImageItem, update func()) *fyne.Container {
 		rightSection.Show()
 	}
 
-	return container.NewGridWithColumns(2, leftSection, container.NewBorder(nil, nil, nil, fileInfoContainer))
+	return container.NewGridWithRows(2, container.NewGridWithColumns(2, leftSection, container.NewBorder(nil, nil, nil, fileInfoContainer)), container.New(layout.NewCustomPaddedLayout(0, 0, 0, 0)))
 }
 
 func calcPercentage(originalSize, convertedSize int64) string {

@@ -65,7 +65,7 @@ func Run(service services.WebpService) {
 			widget := o.(*fyne.Container)
 			widget.Objects = models.NewImageItemWidget(item, ui.forceRefreshList).Objects
 			ui.mutex.Unlock()
-			ui.listWidget.SetItemHeight(i, 50)
+			ui.listWidget.SetItemHeight(i, 55)
 		})
 
 	ui.listWidget = _list
