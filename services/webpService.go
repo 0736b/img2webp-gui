@@ -9,6 +9,9 @@ import "C"
 import (
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"img2webp/utils"
 	"log"
 	"os"
@@ -18,8 +21,8 @@ import (
 )
 
 type WebpService interface {
-	GetFileSize(path string) int64
-	ConvertToWebp(path string) (string, error)
+	GetFileSize(path string) (int64, error)
+	ConvertToWebp(path string, outputPath string) (string, error)
 }
 
 type WebpServiceImpl struct{}
@@ -28,20 +31,18 @@ func NewWebpService() *WebpServiceImpl {
 	return &WebpServiceImpl{}
 }
 
-func (s *WebpServiceImpl) GetFileSize(path string) int64 {
+func (s *WebpServiceImpl) GetFileSize(path string) (int64, error) {
 
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		log.Println("GetFileSize failed to read file stat", err.Error())
-		return -1
+		return -1, err
 	}
 
-	fileSize := fileInfo.Size()
-
-	return fileSize
+	return fileInfo.Size(), nil
 }
 
-func (s *WebpServiceImpl) ConvertToWebp(path string) (string, error) {
+func (s *WebpServiceImpl) ConvertToWebp(path string, outputPath string) (string, error) {
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -82,21 +83,21 @@ func (s *WebpServiceImpl) ConvertToWebp(path string) (string, error) {
 		return "", fmt.Errorf("error encoding to webp")
 	}
 
-	goOutput := C.GoBytes(unsafe.Pointer(output), C.int(outputSize))
+	webpOutput := C.GoBytes(unsafe.Pointer(output), C.int(outputSize))
 
 	defer C.free(unsafe.Pointer(output))
 
-	outputFileName := utils.ExtractFileName(path)
-	ext := filepath.Ext(outputFileName)
-	outputPath := utils.OUTPUT_PATH + strings.TrimSuffix(outputFileName, ext) + ".webp"
+	fileName := utils.ExtractFileName(path)
+	ext := filepath.Ext(fileName)
+	writePath := outputPath + strings.TrimSuffix(fileName, ext) + ".webp"
 
-	err = os.WriteFile(outputPath, goOutput, 0644)
+	err = os.WriteFile(writePath, webpOutput, 0644)
 	if err != nil {
 		log.Println("ConvertToWebp failed to writing WebP file:", err.Error())
 		return "", fmt.Errorf("error failed to wrting webp file")
 	}
 
-	log.Println("ConvertToWebp successfully", output)
+	// log.Println("ConvertToWebp successfully", writePath)
 
-	return outputPath, nil
+	return writePath, nil
 }

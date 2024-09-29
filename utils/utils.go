@@ -8,24 +8,35 @@ import (
 )
 
 const (
-	OUTPUT_PATH string = "./output/"
+	OutputDirPath string = "./output/"
+)
+
+const (
+	_        = iota
+	KB int64 = 1 << (10 * iota)
+	MB
+	GB
 )
 
 func FormatFileSize(size int64) string {
 
-	if size < 1024 {
+	switch {
+	case size == -1:
+		return ""
+	case size < int64(KB):
 		return fmt.Sprintf("%d B", size)
-	} else if size < 1024*1024 {
-		return fmt.Sprintf("%.2f KB", float64(size)/1024)
-	} else if size < 1024*1024*1024 {
-		return fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+	case size < int64(MB):
+		return fmt.Sprintf("%.2f KB", float64(size)/float64(KB))
+	case size < int64(GB):
+		return fmt.Sprintf("%.2f MB", float64(size)/float64(MB))
+	default:
+		return fmt.Sprintf("%.2f GB", float64(size)/float64(GB))
 	}
-	return fmt.Sprintf("%.2f GB", float64(size)/(1024*1024*1024))
 }
 
 func CreateOutputDir() error {
 
-	err := os.MkdirAll(OUTPUT_PATH, os.ModeDir)
+	err := os.MkdirAll(OutputDirPath, os.ModeDir)
 	if err != nil {
 		log.Println("CreateOutputDir", err.Error())
 		return err

@@ -67,14 +67,14 @@ func (ui *AppState) createListWidget() *widget.List {
 			return len(ui.fileList)
 		},
 		func() fyne.CanvasObject {
-			return models.NewImageItemWidget(&models.ImageItem{}, ui.forceRefreshList)
+			return models.NewImageItemWidget(&models.ImageItem{})
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			ui.mutex.RLock()
 			item := ui.fileList[i]
 			ui.mutex.RUnlock()
 			widget := o.(*fyne.Container)
-			widget.Objects = models.NewImageItemWidget(item, ui.forceRefreshList).Objects
+			widget.Objects = models.NewImageItemWidget(item).Objects
 			ui.listWidget.SetItemHeight(i, 50)
 		})
 }
@@ -110,46 +110,67 @@ func (ui *AppState) onClearList() {
 func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 
 	for _, uri := range uris {
-		item := &models.ImageItem{
-			Path:              uri.Path(),
-			FileName:          utils.ExtractFileName(uri.Path()),
-			OriginalFileSize:  ui.service.GetFileSize(uri.Path()),
-			ConvertedFileSize: -1,
-			IsConverting:      true,
-		}
-		ui.mutex.Lock()
-		ui.fileList = append(ui.fileList, item)
-		ui.mutex.Unlock()
-		ui.listWidget.Refresh()
-		go ui.convertFile(item)
+		ui.handleDropFiles(uri)
 	}
 
 	ui.statusLabel.SetText("Converting...")
 }
 
+func (ui *AppState) handleDropFiles(uri fyne.URI) {
+
+	fileSize, err := ui.service.GetFileSize(uri.Path())
+	if err != nil {
+		log.Println("onDropFiles failed", err.Error())
+	}
+	item := &models.ImageItem{
+		Path:              uri.Path(),
+		FileName:          utils.ExtractFileName(uri.Path()),
+		OriginalFileSize:  fileSize,
+		ConvertedFileSize: -1,
+		IsConverting:      true,
+	}
+	ui.mutex.Lock()
+	ui.fileList = append(ui.fileList, item)
+	ui.mutex.Unlock()
+	ui.listWidget.Refresh()
+	go ui.convertFile(item)
+}
+
 func (ui *AppState) convertFile(item *models.ImageItem) {
 
-	convertedPath, err := ui.service.ConvertToWebp(item.Path)
+	convertedPath, err := ui.service.ConvertToWebp(item.Path, utils.OutputDirPath)
 	if err != nil {
 		log.Println("convertFile failed", err.Error())
+		ui.mutex.Lock()
+		item.IsConverting = false
+		item.ConvertedFileSize = -99
+		ui.mutex.Unlock()
+		ui.doConvertedCount(false)
 		return
 	}
 
 	if convertedPath != "" {
 		ui.mutex.Lock()
-		item.ConvertedFileSize = ui.service.GetFileSize(convertedPath)
+		convertedSize, err := ui.service.GetFileSize(convertedPath)
+		if err != nil {
+			log.Println("convertFile failed", err.Error())
+		}
+		item.ConvertedFileSize = convertedSize
 		item.IsConverting = false
 		ui.mutex.Unlock()
-		ui.addConvertedCount()
-		ui.forceRefreshList()
+		ui.doConvertedCount(true)
 	}
 }
 
-func (ui *AppState) addConvertedCount() {
+func (ui *AppState) doConvertedCount(success bool) {
 
-	count := atomic.AddInt32(&ui.convertedCount, 1)
+	count := atomic.AddInt32(&ui.convertedCount, 0)
+	if success {
+		count = atomic.AddInt32(&ui.convertedCount, 1)
+	}
 	ui.mutex.RLock()
 	totalFiles := len(ui.fileList)
 	ui.mutex.RUnlock()
 	ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", count, totalFiles))
+	ui.forceRefreshList()
 }

@@ -18,7 +18,7 @@ type ImageItem struct {
 	IsConverting      bool
 }
 
-func NewImageItemWidget(item *ImageItem, update func()) *fyne.Container {
+func NewImageItemWidget(item *ImageItem) *fyne.Container {
 
 	fileNameLabel := widget.NewLabel(item.FileName)
 	fileNameLabel.TextStyle = fyne.TextStyle{Bold: true}
@@ -41,8 +41,11 @@ func NewImageItemWidget(item *ImageItem, update func()) *fyne.Container {
 	if !item.IsConverting {
 		loading.Stop()
 		loading.Hide()
-		if item.ConvertedFileSize != -1 {
+		if item.ConvertedFileSize != -1 && item.ConvertedFileSize != -99 {
 			percentageSizeLabel.SetText(calcPercentage(item.OriginalFileSize, item.ConvertedFileSize))
+		} else {
+			percentageSizeLabel.SetText("Failed")
+			convertedSizeLabel.SetText("")
 		}
 		convertedSection.Show()
 	}
