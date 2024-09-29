@@ -10,6 +10,9 @@ import (
 	"img2webp/gui"
 	"img2webp/services"
 	"img2webp/utils"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
 )
 
 func main() {
@@ -19,6 +22,14 @@ func main() {
 
 	service := services.NewWebpService()
 
-	gui.Run(service)
+	a := app.New()
+	w := a.NewWindow("Img2Webp Converter")
+	w.Resize(fyne.NewSize(648, 324))
+	w.SetFixedSize(true)
+
+	appState := gui.NewAppState(w, service)
+	appState.SetupUI()
+
+	w.ShowAndRun()
 
 }

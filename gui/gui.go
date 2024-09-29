@@ -8,9 +8,9 @@ import (
 	"img2webp/utils"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
@@ -19,82 +19,64 @@ import (
 )
 
 type AppState struct {
-	win fyne.Window
-
-	service services.WebpService
-
-	fileList   []*models.ImageItem
-	listWidget *widget.List
-
+	win            fyne.Window
+	service        services.WebpService
+	fileList       []*models.ImageItem
+	listWidget     *widget.List
 	statusLabel    *widget.Label
-	convertedCount int
-	countChan      chan struct{}
-
-	mutex sync.Mutex
+	convertedCount int32
+	mutex          sync.RWMutex
 }
 
-func Run(service services.WebpService) {
+func NewAppState(w fyne.Window, service services.WebpService) *AppState {
 
-	a := app.New()
-	w := a.NewWindow("Img2Webp Converter")
-	w.Resize(fyne.NewSize(648, 324))
-	w.SetFixedSize(true)
-
-	ui := &AppState{
-		win:     w,
-		service: service,
-
-		fileList:       []*models.ImageItem{},
-		convertedCount: 0,
-		countChan:      make(chan struct{}, 1),
+	return &AppState{
+		win:      w,
+		service:  service,
+		fileList: []*models.ImageItem{},
 	}
+}
 
-	_list := widget.NewList(
+func (ui *AppState) SetupUI() {
 
-		func() int {
-			return len(ui.fileList)
-		},
+	ui.listWidget = ui.createListWidget()
+	dropLabel := widget.NewLabel("Drag and drop your image files")
+	ui.statusLabel = widget.NewLabel("Waiting for files...")
+	clearBtn := widget.NewButtonWithIcon("Clear", theme.DeleteIcon(), ui.onClearList)
 
-		func() fyne.CanvasObject {
-			return models.NewImageItemWidget(&models.ImageItem{}, ui.forceRefreshList)
-		},
+	bg := canvas.NewRectangle(color.RGBA{R: 0, G: 0, B: 0, A: 60})
+	scrollContainer := container.NewVScroll(ui.listWidget)
 
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			ui.mutex.Lock()
-			item := ui.fileList[i]
-			widget := o.(*fyne.Container)
-			widget.Objects = models.NewImageItemWidget(item, ui.forceRefreshList).Objects
-			ui.mutex.Unlock()
-			ui.listWidget.SetItemHeight(i, 55)
-		})
-
-	ui.listWidget = _list
-
-	_dropLabel := widget.NewLabel("Drag and drop your image files")
-
-	_statusLabel := widget.NewLabel("Waiting for files...")
-	ui.statusLabel = _statusLabel
-
-	_clearBtn := widget.NewButtonWithIcon("Clear", theme.DeleteIcon(), ui.onClearList)
-
-	_bg := canvas.NewRectangle(color.RGBA{R: 0, G: 0, B: 0, A: 60})
-
-	_scrollContainer := container.NewVScroll(ui.listWidget)
-
-	_content := container.NewBorder(
-		container.NewCenter(_dropLabel),
-		container.NewBorder(nil, nil, ui.statusLabel, _clearBtn), nil, nil,
-		container.New(layout.CustomPaddedLayout{TopPadding: 8, BottomPadding: 8, LeftPadding: 0, RightPadding: 0}, container.NewStack(_bg, _scrollContainer)),
+	content := container.NewBorder(
+		container.NewCenter(dropLabel),
+		container.NewBorder(nil, nil, ui.statusLabel, clearBtn), nil, nil,
+		container.New(layout.CustomPaddedLayout{TopPadding: 8, BottomPadding: 8, LeftPadding: 0, RightPadding: 0}, container.NewStack(bg, scrollContainer)),
 	)
 
 	ui.win.SetOnDropped(ui.onDropFiles)
+	ui.win.SetContent(container.New(layout.CustomPaddedLayout{TopPadding: 0, BottomPadding: 8, LeftPadding: 12, RightPadding: 12}, content))
 
-	ui.win.SetContent(container.New(layout.CustomPaddedLayout{TopPadding: 0, BottomPadding: 8, LeftPadding: 12, RightPadding: 12}, _content))
+}
 
-	go ui.convertedCounter()
+func (ui *AppState) createListWidget() *widget.List {
 
-	ui.win.ShowAndRun()
-
+	return widget.NewList(
+		func() int {
+			ui.mutex.RLock()
+			defer ui.mutex.RUnlock()
+			return len(ui.fileList)
+		},
+		func() fyne.CanvasObject {
+			return models.NewImageItemWidget(&models.ImageItem{}, ui.forceRefreshList)
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			ui.mutex.RLock()
+			item := ui.fileList[i]
+			ui.mutex.RUnlock()
+			widget := o.(*fyne.Container)
+			widget.Objects = models.NewImageItemWidget(item, ui.forceRefreshList).Objects
+			ui.listWidget.SetItemHeight(i, 50)
+		})
 }
 
 func (ui *AppState) forceRefreshList() {
@@ -105,26 +87,22 @@ func (ui *AppState) forceRefreshList() {
 func (ui *AppState) onClearList() {
 
 	ui.mutex.Lock()
-
-	oldLen := len(ui.fileList)
-
-	n := 0
-	for _, x := range ui.fileList {
-		if x.IsConverting {
-			ui.fileList[n] = x
-			n++
+	oldFileListLen := len(ui.fileList)
+	newFileList := make([]*models.ImageItem, 0, len(ui.fileList))
+	for _, item := range ui.fileList {
+		if item.IsConverting {
+			newFileList = append(newFileList, item)
 		}
 	}
-	ui.fileList = ui.fileList[:n]
-	ui.convertedCount = 0
-
+	ui.fileList = newFileList
+	atomic.StoreInt32(&ui.convertedCount, 0)
 	ui.mutex.Unlock()
 
 	if len(ui.fileList) == 0 {
 		ui.statusLabel.SetText("Waiting for files...")
 	}
 
-	if oldLen != len(ui.fileList) {
+	if oldFileListLen != len(ui.fileList) {
 		ui.listWidget.Refresh()
 	}
 }
@@ -132,7 +110,6 @@ func (ui *AppState) onClearList() {
 func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 
 	for _, uri := range uris {
-
 		item := &models.ImageItem{
 			Path:              uri.Path(),
 			FileName:          utils.ExtractFileName(uri.Path()),
@@ -140,26 +117,22 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 			ConvertedFileSize: -1,
 			IsConverting:      true,
 		}
-
 		ui.mutex.Lock()
 		ui.fileList = append(ui.fileList, item)
 		ui.mutex.Unlock()
-
 		ui.listWidget.Refresh()
-
-		go ui.convertFile(item, ui.forceRefreshList)
+		go ui.convertFile(item)
 	}
 
-	ui.mutex.Lock()
 	ui.statusLabel.SetText("Converting...")
-	ui.mutex.Unlock()
 }
 
-func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
+func (ui *AppState) convertFile(item *models.ImageItem) {
 
 	convertedPath, err := ui.service.ConvertToWebp(item.Path)
 	if err != nil {
 		log.Println("convertFile failed", err.Error())
+		return
 	}
 
 	if convertedPath != "" {
@@ -167,15 +140,16 @@ func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 		item.ConvertedFileSize = ui.service.GetFileSize(convertedPath)
 		item.IsConverting = false
 		ui.mutex.Unlock()
-		ui.countChan <- struct{}{}
-		update()
+		ui.addConvertedCount()
+		ui.forceRefreshList()
 	}
 }
 
-func (ui *AppState) convertedCounter() {
+func (ui *AppState) addConvertedCount() {
 
-	for range ui.countChan {
-		ui.convertedCount++
-		ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", ui.convertedCount, len(ui.fileList)))
-	}
+	count := atomic.AddInt32(&ui.convertedCount, 1)
+	ui.mutex.RLock()
+	totalFiles := len(ui.fileList)
+	ui.mutex.RUnlock()
+	ui.statusLabel.SetText(fmt.Sprintf("Converted %d/%d files", count, totalFiles))
 }
