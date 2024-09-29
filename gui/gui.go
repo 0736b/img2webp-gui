@@ -6,6 +6,7 @@ import (
 	"img2webp/gui/models"
 	"img2webp/services"
 	"img2webp/utils"
+	"log"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -135,7 +136,7 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 		item := &models.ImageItem{
 			Path:              uri.Path(),
 			FileName:          utils.ExtractFileName(uri.Path()),
-			OriginalFileSize:  ui.service.GetFileSizeString(uri.Path()),
+			OriginalFileSize:  ui.service.GetFileSize(uri.Path()),
 			ConvertedFileSize: -1,
 			IsConverting:      true,
 		}
@@ -156,10 +157,14 @@ func (ui *AppState) onDropFiles(pos fyne.Position, uris []fyne.URI) {
 
 func (ui *AppState) convertFile(item *models.ImageItem, update func()) {
 
-	convertedSize := ui.service.ConvertToWebp(item.Path)
-	if convertedSize != -1 {
+	convertedPath, err := ui.service.ConvertToWebp(item.Path)
+	if err != nil {
+		log.Println("convertFile failed", err.Error())
+	}
+
+	if convertedPath != "" {
 		ui.mutex.Lock()
-		item.ConvertedFileSize = convertedSize
+		item.ConvertedFileSize = ui.service.GetFileSize(convertedPath)
 		item.IsConverting = false
 		ui.mutex.Unlock()
 		ui.countChan <- struct{}{}

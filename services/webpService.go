@@ -9,6 +9,7 @@ package services
 import "C"
 
 import (
+	"fmt"
 	"image"
 	"img2webp/utils"
 	"log"
@@ -19,8 +20,8 @@ import (
 )
 
 type WebpService interface {
-	GetFileSizeString(path string) int64
-	ConvertToWebp(path string) int64
+	GetFileSize(path string) int64
+	ConvertToWebp(path string) (string, error)
 }
 
 type WebpServiceImpl struct{}
@@ -29,11 +30,11 @@ func NewWebpService() *WebpServiceImpl {
 	return &WebpServiceImpl{}
 }
 
-func (s *WebpServiceImpl) GetFileSizeString(path string) int64 {
+func (s *WebpServiceImpl) GetFileSize(path string) int64 {
 
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		log.Println("GetFileSizeString", err.Error())
+		log.Println("GetFileSize failed to read file stat", err.Error())
 		return -1
 	}
 
@@ -42,19 +43,19 @@ func (s *WebpServiceImpl) GetFileSizeString(path string) int64 {
 	return fileSize
 }
 
-func (s *WebpServiceImpl) ConvertToWebp(path string) int64 {
+func (s *WebpServiceImpl) ConvertToWebp(path string) (string, error) {
 
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("Error opening file:", err)
-		return -1
+		log.Println("ConvertToWebp failed to opening file:", err.Error())
+		return "", err
 	}
 	defer file.Close()
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		log.Println("Error decoding image:", err)
-		return -1
+		log.Println("ConvertToWebp failed decoding image:", err.Error())
+		return "", err
 	}
 
 	bounds := img.Bounds()
@@ -79,8 +80,8 @@ func (s *WebpServiceImpl) ConvertToWebp(path string) int64 {
 	)
 
 	if outputSize == 0 {
-		log.Println("Error encoding to WebP")
-		return -1
+		log.Println("ConvertToWebp failed to encoding to WebP")
+		return "", fmt.Errorf("error encoding to webp")
 	}
 
 	goOutput := C.GoBytes(unsafe.Pointer(output), C.int(outputSize))
@@ -93,11 +94,11 @@ func (s *WebpServiceImpl) ConvertToWebp(path string) int64 {
 
 	err = os.WriteFile(outputPath, goOutput, 0644)
 	if err != nil {
-		log.Println("Error writing WebP file:", err)
-		return -1
+		log.Println("ConvertToWebp failed to writing WebP file:", err.Error())
+		return "", fmt.Errorf("error failed to wrting webp file")
 	}
 
-	log.Println("Image converted successfully")
+	log.Println("ConvertToWebp successfully", output)
 
-	return s.GetFileSizeString(outputPath)
+	return outputPath, nil
 }
