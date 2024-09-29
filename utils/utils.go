@@ -21,7 +21,7 @@ const (
 func FormatFileSize(size int64) string {
 
 	switch {
-	case size == -1:
+	case size == -1 || size == -99:
 		return ""
 	case size < int64(KB):
 		return fmt.Sprintf("%d B", size)
