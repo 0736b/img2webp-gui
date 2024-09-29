@@ -27,3 +27,5 @@ go.work.sum
 personal_test/
 
 *.jpg
+
+output/
