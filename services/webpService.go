@@ -1,8 +1,6 @@
 package services
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/webp/include
-#cgo LDFLAGS: -L${SRCDIR}/webp/lib -lwebp
 #include "../webp/include/webp/encode.h"
 #include <stdlib.h>
 */
