@@ -45,7 +45,6 @@ func NewImageItemWidget(item *ImageItem) *fyne.Container {
 			percentageSizeLabel.SetText(calcPercentage(item.OriginalFileSize, item.ConvertedFileSize))
 		} else {
 			percentageSizeLabel.SetText("Failed")
-			convertedSizeLabel.SetText("")
 		}
 		convertedSection.Show()
 	}
